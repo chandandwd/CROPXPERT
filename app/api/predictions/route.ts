@@ -80,13 +80,17 @@ export async function POST(request: Request) {
 
     const predictions = generatePredictions(cropType, area)
 
-    // Persist to Supabase
-    await supabase.from('predictions').insert({
-      user_id: user.id,
-      crop_type: cropType,
-      predicted_yield: predictions.estimatedYield,
-      confidence_score: predictions.confidence
-    })
+    // Persist to Supabase (Optional: don't crash if save fails)
+    try {
+      await supabase.from('predictions').insert({
+        user_id: user.id,
+        crop_type: cropType,
+        predicted_yield: predictions.estimatedYield,
+        confidence_score: predictions.confidence
+      })
+    } catch (dbError) {
+      console.warn("Could not save prediction to database:", dbError)
+    }
 
     return NextResponse.json(predictions)
   } catch (error) {
