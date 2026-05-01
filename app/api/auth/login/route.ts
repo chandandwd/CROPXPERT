@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server'
-import connectDB from '@/lib/mongodb'
-import User from '@/lib/models/User'
-import { signToken, buildTokenCookie } from '@/lib/auth'
+import { supabase } from '@/lib/supabase'
 
 // POST /api/auth/login
 export async function POST(request: Request) {
@@ -12,27 +10,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
     }
 
-    await connectDB()
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
 
-    // Find user and include password for comparison
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password')
-    if (!user) {
-      return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 401 })
     }
 
-    const isMatch = await user.comparePassword(password)
-    if (!isMatch) {
-      return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
+    const safeUser = {
+      id: data.user?.id,
+      email: data.user?.email,
+      name: data.user?.user_metadata?.full_name,
     }
 
-    const token = signToken({ userId: user._id.toString(), email: user.email, role: user.role })
-
-    // Return user without password (handled by toJSON transform)
-    const safeUser = user.toJSON()
-
-    const response = NextResponse.json({ message: 'Login successful', user: safeUser })
-    response.headers.set('Set-Cookie', buildTokenCookie(token))
-    return response
+    return NextResponse.json({ message: 'Login successful', user: safeUser })
   } catch (error) {
     console.error('Login error:', error)
     return NextResponse.json({ error: 'Login failed' }, { status: 500 })

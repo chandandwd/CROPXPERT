@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server'
-import connectDB from '@/lib/mongodb'
-import User from '@/lib/models/User'
-import { signToken, buildTokenCookie } from '@/lib/auth'
+import { supabase } from '@/lib/supabase'
 
 // POST /api/auth/signup
 export async function POST(request: Request) {
   try {
-    const { name, email, password, role, phone, location, farmSize, primaryCrops } = await request.json()
+    const { name, email, password } = await request.json()
 
     if (!name || !email || !password) {
       return NextResponse.json(
@@ -15,48 +13,33 @@ export async function POST(request: Request) {
       )
     }
 
-    if (password.length < 6) {
-      return NextResponse.json(
-        { error: 'Password must be at least 6 characters' },
-        { status: 400 }
-      )
-    }
-
-    if (!process.env.JWT_SECRET) {
-      console.error('❌ Missing JWT_SECRET environment variable!')
-      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
-    }
-
-    await connectDB()
-
-    // Check if user already exists
-    const existing = await User.findOne({ email: email.toLowerCase() })
-    if (existing) {
-      return NextResponse.json({ error: 'Email already registered' }, { status: 409 })
-    }
-
-    // Create user (password hashed in pre-save hook)
-    const user = await User.create({
-      name,
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      role: role || 'farmer',
-      phone,
-      location,
-      farmSize,
-      primaryCrops,
+      options: {
+        data: {
+          full_name: name,
+        },
+      },
     })
 
-    const token = signToken({ userId: user._id.toString(), email: user.email, role: user.role })
+    if (error) {
+      throw error
+    }
 
-    const response = NextResponse.json(
-      { message: 'Account created successfully', user },
+    return NextResponse.json(
+      { 
+        message: 'Account created successfully', 
+        user: {
+          id: data.user?.id,
+          email: data.user?.email,
+          name: name
+        } 
+      },
       { status: 201 }
     )
-    response.headers.set('Set-Cookie', buildTokenCookie(token))
-    return response
   } catch (error: any) {
     console.error('Signup error:', error)
-    return NextResponse.json({ error: 'Failed to create account' }, { status: 500 })
+    return NextResponse.json({ error: error.message || 'Failed to create account' }, { status: 500 })
   }
 }
