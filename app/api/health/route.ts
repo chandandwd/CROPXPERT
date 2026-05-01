@@ -1,28 +1,17 @@
 import { NextResponse } from 'next/server'
-import connectDB from '@/lib/mongodb'
-import mongoose from 'mongoose'
+import { supabase } from '@/lib/supabase'
 
 export async function GET() {
   try {
-    await connectDB()
-    const state = mongoose.connection.readyState
-    const states = {
-      0: 'disconnected',
-      1: 'connected',
-      2: 'connecting',
-      3: 'disconnecting',
-    }
+    // Check Supabase connectivity instead of MongoDB
+    const { error } = await supabase.from('market_prices').select('count', { count: 'exact', head: true }).limit(1)
 
     return NextResponse.json({
-      status: 'success',
-      message: 'Database connection is healthy',
-      readyState: states[state as keyof typeof states],
-      database: mongoose.connection.name,
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      database: error ? 'error' : 'connected',
+      environment: process.env.NODE_ENV,
     })
-  } catch (error: any) {
-    return NextResponse.json({
-      status: 'error',
-      message: 'Database connection failed',
       error: error.message,
     }, { status: 500 })
   }

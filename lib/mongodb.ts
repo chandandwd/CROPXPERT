@@ -3,7 +3,7 @@ import mongoose from 'mongoose'
 const MONGODB_URI = process.env.MONGODB_URI || process.env.MONGO_URI
 
 if (!MONGODB_URI) {
-  throw new Error('Please define the MONGODB_URI or MONGO_URI environment variable in .env.local')
+  console.warn('⚠️ MONGODB_URI missing. Skipping MongoDB connection.')
 }
 
 // Extend global type to cache the connection
@@ -18,7 +18,11 @@ if (!cached) {
   cached = global.mongoose = { conn: null, promise: null }
 }
 
-async function connectDB(): Promise<mongoose.Connection> {
+async function connectDB(): Promise<mongoose.Connection | null> {
+  if (!MONGODB_URI) {
+    return null
+  }
+
   if (cached.conn) {
     return cached.conn
   }
