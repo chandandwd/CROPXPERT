@@ -1,23 +1,23 @@
 import { NextResponse } from 'next/server'
-import connectDB from '@/lib/mongodb'
-import User from '@/lib/models/User'
-import { getAuthUser } from '@/lib/auth'
+import { supabase } from '@/lib/supabase'
 
 // GET /api/auth/me  — returns the logged-in user profile
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const authUser = await getAuthUser(request)
-    if (!authUser) {
+    const { data: { user }, error } = await supabase.auth.getUser()
+    
+    if (error || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    await connectDB()
-    const user = await User.findById(authUser.userId)
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
-    return NextResponse.json({ user })
+    return NextResponse.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.user_metadata?.full_name,
+        ...user.user_metadata
+      }
+    })
   } catch (error) {
     console.error('Get profile error:', error)
     return NextResponse.json({ error: 'Failed to fetch profile' }, { status: 500 })
@@ -27,30 +27,22 @@ export async function GET(request: Request) {
 // PATCH /api/auth/me  — update profile fields
 export async function PATCH(request: Request) {
   try {
-    const authUser = await getAuthUser(request)
-    if (!authUser) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const updates = await request.json()
+    const { data, error } = await supabase.auth.updateUser({
+      data: updates
+    })
 
-    // Disallow changing sensitive fields via this route
-    delete updates.password
-    delete updates.role
-    delete updates.email
-
-    await connectDB()
-    const user = await User.findByIdAndUpdate(
-      authUser.userId,
-      { $set: updates },
-      { new: true, runValidators: true }
-    )
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    return NextResponse.json({ user })
+    return NextResponse.json({ 
+      user: {
+        id: data.user?.id,
+        email: data.user?.email,
+        ...data.user?.user_metadata
+      }
+    })
   } catch (error) {
     console.error('Update profile error:', error)
     return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
