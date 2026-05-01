@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server'
-import connectDB from '@/lib/mongodb'
-import Prediction from '@/lib/models/Prediction'
-import { getAuthUser } from '@/lib/auth'
+import { supabase } from '@/lib/supabase'
 
 // Profit and yield predictions
 interface PredictionRequest {
@@ -68,8 +66,9 @@ function generatePredictions(cropType: string, area: number): PredictionResponse
 
 export async function POST(request: Request) {
   try {
-    const authUser = await getAuthUser(request)
-    if (!authUser) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -81,15 +80,12 @@ export async function POST(request: Request) {
 
     const predictions = generatePredictions(cropType, area)
 
-    await connectDB()
-    
-    // Persist to database
-    await Prediction.create({
-      userId: authUser.userId,
-      cropType,
-      area,
-      soilType,
-      ...predictions,
+    // Persist to Supabase
+    await supabase.from('predictions').insert({
+      user_id: user.id,
+      crop_type: cropType,
+      predicted_yield: predictions.estimatedYield,
+      confidence_score: predictions.confidence
     })
 
     return NextResponse.json(predictions)
